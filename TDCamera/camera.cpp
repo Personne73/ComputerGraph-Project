@@ -133,3 +133,5 @@ int main() {
     glfwTerminate();
     return 0;
 }
+
+// g++ -o camera camera.cpp -framework OpenGL -lglfw  && ./camera
