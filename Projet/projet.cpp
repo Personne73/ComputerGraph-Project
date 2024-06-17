@@ -28,7 +28,6 @@ struct Mesh {
     GLuint ebo;  // Element Buffer Object (ou Index Buffer Object)
 };
 
-
 struct Application
 {
     GLShader m_basicProgram;
@@ -41,7 +40,7 @@ struct Application
         m_basicProgram.Create();
 
         // LoadObj("file/IronMan.obj");
-        LoadOBJ("file/IronMan.obj", m_mesh);
+        LoadOBJ("file/apple.obj", m_mesh);
         SetupMesh(m_mesh);
     }
 
