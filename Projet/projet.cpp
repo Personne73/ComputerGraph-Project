@@ -11,48 +11,61 @@
 #include "common/GLShader.h"
 #include "common/tiny_obj_loader.cc"
 
-struct vec2 { float x, y; };
-struct vec3 { float x, y, z; };
+struct vec2 {
+    float x, y;
+    vec2() : x(0), y(0) {}
+    vec2(float x, float y) : x(x), y(y) {}
+};
+
+struct vec3 {
+    float x, y, z;
+    vec3() : x(0), y(0), z(0) {}
+    vec3(float x, float y, float z) : x(x), y(y), z(z) {}
+};
 
 struct Vertex {
-    vec3 position;  // Position du sommet dans l'espace 3D
-    vec3 normal;    // Vecteur normal au sommet (utile pour l'éclairage)
-    vec2 texCoord;  // Coordonnées de texture (pour appliquer des textures)
+    vec3 position;
+    vec3 normal;
+    vec2 texCoord;
+};
+
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
 };
 
 struct Mesh {
-    std::vector<Vertex> vertices;  // Liste des sommets du maillage
-    std::vector<unsigned int> indices;  // Liste des indices des sommets pour définir les triangles
-    GLuint vao;  // Vertex Array Object
-    GLuint vbo;  // Vertex Buffer Object
-    GLuint ebo;  // Element Buffer Object (ou Index Buffer Object)
+    std::vector<Vertex> vertices;
+    std::vector<unsigned int> indices;
+    std::vector<Material> materials;
+    Material defaultMaterial;
+    GLuint vbo;
+    GLuint ebo;
 };
 
-struct Application
-{
+struct Application {
     GLShader m_basicProgram;
     Mesh m_mesh;
 
-    void Initialize()
-    {
+    void Initialize() {
         m_basicProgram.LoadVertexShader("basic.vs.glsl");
         m_basicProgram.LoadFragmentShader("basic.fs.glsl");
         m_basicProgram.Create();
 
-        // LoadObj("file/IronMan.obj");
-        LoadOBJ("file/apple.obj", m_mesh);
-        SetupMesh(m_mesh);
+        if (LoadObject("file/apple.obj", m_mesh)) {
+            std::cout << "Loaded OBJ file" << std::endl;
+        }
     }
 
     void Terminate() {
-        glDeleteVertexArrays(1, &m_mesh.vao);
         glDeleteBuffers(1, &m_mesh.vbo);
         glDeleteBuffers(1, &m_mesh.ebo);
         m_basicProgram.Destroy();
     }
 
-    // Load the obj file
-    void LoadOBJ(const std::string& filename, Mesh& mesh) {
+    bool LoadObject(const std::string& filename, Mesh& mesh) {
         tinyobj::attrib_t attrib;
         std::vector<tinyobj::shape_t> shapes;
         std::vector<tinyobj::material_t> materials;
@@ -63,8 +76,15 @@ struct Application
         if (!err.empty()) std::cerr << "ERR : " << err << std::endl;
         if (!ret) {
             std::cerr << "Failed to load OBJ file : " << filename << std::endl;
-            return;
+            return false;
         }
+
+        Material defaultMaterial = {};
+        defaultMaterial.ambient = vec3(0.2f, 0.2f, 0.2f);
+        defaultMaterial.diffuse = vec3(0.8f, 0.8f, 0.8f);
+        defaultMaterial.specular = vec3(1.0f, 1.0f, 1.0f);
+        defaultMaterial.shininess = 32.0f;
+        mesh.defaultMaterial = defaultMaterial;
 
         for (const auto& shape : shapes) {
             for (const auto& index : shape.mesh.indices) {
@@ -84,17 +104,25 @@ struct Application
                     vertex.texCoord.y = attrib.texcoords[2 * index.texcoord_index + 1];
                 }
 
-
                 mesh.vertices.push_back(vertex);
                 mesh.indices.push_back(mesh.indices.size());
             }
         }
+
+        std::cout << "Vertices loaded : " << mesh.vertices.size() << std::endl;
+        std::cout << "Indices loaded : " << mesh.indices.size() << std::endl;
+
+        if (!mesh.vertices.empty()) {
+            SetupMesh(mesh);
+        } else {
+            std::cerr << "No vertices loaded for " << filename << std::endl;
+            return false;
+        }
+
+        return true;
     }
 
     void SetupMesh(Mesh& mesh) {
-        glGenVertexArrays(1, &mesh.vao);
-        glBindVertexArray(mesh.vao);
-
         glGenBuffers(1, &mesh.vbo);
         glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
         glBufferData(GL_ARRAY_BUFFER, mesh.vertices.size() * sizeof(Vertex), &mesh.vertices[0], GL_STATIC_DRAW);
@@ -102,43 +130,37 @@ struct Application
         glGenBuffers(1, &mesh.ebo);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh.indices.size() * sizeof(unsigned int), &mesh.indices[0], GL_STATIC_DRAW);
-
-        // Position attribute
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, position));
-        glEnableVertexAttribArray(0);
-
-        // Normal attribute
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, normal));
-        glEnableVertexAttribArray(1);
-
-        // Texture coord attribute
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
-        glEnableVertexAttribArray(2);
-
-        glBindVertexArray(0); // Unbind VAO
-        // q : why unbind VAO ?
-        // a : to prevent bugs, it's a good practice to unbind the VAO after setting it up
-        // q : why do we don't unbind VBO and EBO ?
-        // a : because the VAO stores the VBO and EBO, so unbinding the VAO will unbind the VBO and EBO
     }
 
-    void Render()
-    {
+    void Render() {
         glClearColor(0.f, 1.f, 0.f, 1.f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         auto basicProgram = m_basicProgram.GetProgram();
         glUseProgram(basicProgram);
 
-        glBindVertexArray(m_mesh.vao);
+        glBindBuffer(GL_ARRAY_BUFFER, m_mesh.vbo);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(3, GL_FLOAT, sizeof(Vertex), (void*)offsetof(Vertex, position));
+
+        glEnableClientState(GL_NORMAL_ARRAY);
+        glNormalPointer(GL_FLOAT, sizeof(Vertex), (void*)offsetof(Vertex, normal));
+
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, sizeof(Vertex), (void*)offsetof(Vertex, texCoord));
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_mesh.ebo);
         glDrawElements(GL_TRIANGLES, m_mesh.indices.size(), GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+
+        glDisableClientState(GL_VERTEX_ARRAY);
+        glDisableClientState(GL_NORMAL_ARRAY);
+        glDisableClientState(GL_TEXTURE_COORD_ARRAY);
     }
 };
 
 int main(void) {
-    int width = 800;
-    int height = 600;
+    int width = 1200;
+    int height = 800;
     GLFWwindow* window;
 
     if (!glfwInit()) return -1;
@@ -150,6 +172,7 @@ int main(void) {
     }
     
     glfwMakeContextCurrent(window);
+    glEnable(GL_DEPTH_TEST); // Enable depth testing for correct rendering
 
     Application app;
     app.Initialize();
@@ -164,8 +187,3 @@ int main(void) {
     glfwTerminate();
     return 0;
 }
-
-// Compilation:
-// g++ -o projet projet.cpp common/GLShader.cpp common/tiny_obj_loader.cc -framework OpenGL -lglfw
-// Exécution:
-// ./projet
