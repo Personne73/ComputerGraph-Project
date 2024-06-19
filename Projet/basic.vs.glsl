@@ -3,21 +3,21 @@
 
 #version 120
 
-attribute vec3 a_Position;
-attribute vec3 a_Normal;
-attribute vec2 a_TexCoord;
+attribute vec3 aPos;
+attribute vec3 aNormal;
+attribute vec2 aTexCoord;
 
-uniform float u_Time;
+varying vec3 FragPos;
+varying vec3 Normal;
+varying vec2 TexCoord;
 
-varying vec3 v_Normal;
-varying vec2 v_TexCoord;
+uniform mat4 model;
+uniform mat4 view;
+uniform mat4 projection;
 
-void main()
-{
-    vec3 pos = a_Position;
-    v_Normal = a_Normal;
-    v_TexCoord = a_TexCoord;
-    pos.x += sin(u_Time);
-
-    gl_Position = vec4(pos, 1.0);
+void main() {
+    FragPos = vec3(model * vec4(aPos, 1.0));
+    Normal = mat3(transpose(model)) * aNormal;
+    TexCoord = aTexCoord;
+    gl_Position = projection * view * vec4(FragPos, 1.0);
 }
