@@ -1,4 +1,5 @@
-#include "mat4.h"
+#include <cstring>
+#include <cmath>
 
 class mat4 {
 public:
