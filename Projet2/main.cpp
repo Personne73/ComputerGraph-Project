@@ -12,74 +12,72 @@
 #include "common/GLShader.h"
 #include "common/tiny_obj_loader.cc"
 
-#define INTERVAL 15
+// #define INTERVAL 15
 
-// Variables globales pour stocker les états de la caméra
 double POS_X, POS_Y;
 
-// Variables globales pour la lumière
 GLfloat light_pos[] = {-10.0f, 10.0f, 100.00f, 1.0f};
 
-// Variables globales pour la caméra
 float pos_x = 0.0f, pos_y = 0.0f, pos_z = -20.0f;
 float angle_x = 30.0f, angle_y = 0.0f;
 
-// Variables globales pour la souris
 int x_old = 0, y_old = 0;
 int current_scroll = 0;
 float zoom_per_scroll = 1.0f;
 
-// Variables globales pour le clavier
 bool is_holding_mouse = false;
 bool is_updated = false;
 
-// struct vec2 {
-//     float x, y;
-//     vec2() : x(0), y(0) {}
-//     vec2(float x, float y) : x(x), y(y) {}
-// };
+struct vec2 {
+    float x, y;
+    vec2() : x(0), y(0) {}
+    vec2(float x, float y) : x(x), y(y) {}
+};
 
-// struct vec3 {
-//     float x, y, z;
-//     vec3() : x(0), y(0), z(0) {}
-//     vec3(float x, float y, float z) : x(x), y(y), z(z) {}
-// };
+struct vec3 {
+    float x, y, z;
+    vec3() : x(0), y(0), z(0) {}
+    vec3(float x, float y, float z) : x(x), y(y), z(z) {}
+};
 
-// struct Vertex {
-//     vec3 position;
-//     vec3 normal;
-//     vec2 texCoord;
-// };
+struct Vertex {
+    vec3 position;
+    vec3 normal;
+    vec2 texCoord;
+};
 
-// struct Material {
-//     vec3 ambient;
-//     vec3 diffuse;
-//     vec3 specular;
-//     float shininess;
-// };
+struct Triangle {
+    Vertex vertices[3];
+};
 
-// struct Mesh {
-//     std::vector<Vertex> vertices;
-//     std::vector<unsigned int> indices;
-//     std::vector<Material> materials;
-//     Material defaultMaterial;
-//     GLuint vbo;
-//     GLuint ebo;
-// };
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+struct Mesh {
+    std::vector<Vertex> vertices;
+    std::vector<Triangle> triangles;
+    std::vector<unsigned int> indices;
+    std::vector<Material> materials;
+    Material defaultMaterial;
+    GLuint vbo;
+    GLuint ebo;
+};
 
 struct Application {
-    // GLShader m_basicProgram;
-    // Mesh m_mesh;
+    Mesh m_mesh;
 
     void Initialize() {
         glEnable(GL_LIGHTING);
         glEnable(GL_LIGHT0);
-        // GLfloat light_pos[] = {-1.0f, 10.0f, 100.0f, 1.0f};
         glLightfv(GL_LIGHT0, GL_POSITION, light_pos);
         glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        gluPerspective(20.0, 1.0, 1.0, 2000.0);
+        gluPerspective(45.0, 1.0, 0.1, 2000.0);
         glMatrixMode(GL_MODELVIEW);
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -91,88 +89,109 @@ struct Application {
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_DEPTH_TEST);
 
-        // m_basicProgram.LoadVertexShader("basic.vs.glsl");
-        // m_basicProgram.LoadFragmentShader("basic.fs.glsl");
-        // m_basicProgram.Create();
+        if (LoadObject("file/IronMan.obj", m_mesh)) {
+            std::cout << "Loaded OBJ file" << std::endl;
+        }
+    }
+
+    bool LoadObject(const std::string& inputfile, Mesh& mesh) {
+        tinyobj::ObjReaderConfig reader_config;
+        reader_config.mtl_search_path = ""; // Path to material files
+
+        tinyobj::ObjReader reader;
+
+        if (!reader.ParseFromFile(inputfile, reader_config)) {
+            if (!reader.Error().empty()) {
+                std::cerr << "TinyObjReader: " << reader.Error();
+            }
+            return false;
+        }
+
+        if (!reader.Warning().empty()) {
+            std::cout << "TinyObjReader: " << reader.Warning();
+        }
+
+        auto& attrib = reader.GetAttrib();
+        auto& shapes = reader.GetShapes();
+        auto& materials = reader.GetMaterials();
+
+        std::vector<vec3> vertices;
+        for (size_t i = 0; i < attrib.vertices.size(); i += 3) {
+            vertices.emplace_back(
+                attrib.vertices[i],
+                attrib.vertices[i + 1],
+                attrib.vertices[i + 2]);
+        }
+
+        std::vector<vec3> normals;
+        for (size_t i = 0; i < attrib.normals.size(); i += 3) {
+            normals.emplace_back(
+                attrib.normals[i],
+                attrib.normals[i + 1],
+                attrib.normals[i + 2]);
+        }
+
+        std::vector<vec2> texcoords;
+        for (size_t i = 0; i < attrib.texcoords.size(); i += 2) {
+            texcoords.emplace_back(
+                attrib.texcoords[i],
+                attrib.texcoords[i + 1]);
+        }
+
+        for (const auto& shape : shapes) {
+            const auto& indices = shape.mesh.indices;
+            for (size_t i = 0; i < indices.size(); i += 3) {
+                Triangle triangle;
+                for (int j = 0; j < 3; ++j) {
+                    int vertex_index = indices[i + j].vertex_index;
+                    int normal_index = indices[i + j].normal_index;
+                    int texcoord_index = indices[i + j].texcoord_index;
+
+                    triangle.vertices[j].position = vertices[vertex_index];
+                    if (normal_index >= 0) {
+                        triangle.vertices[j].normal = normals[normal_index];
+                    }
+                    if (texcoord_index >= 0) {
+                        triangle.vertices[j].texCoord = texcoords[texcoord_index];
+                    }
+                }
+                mesh.triangles.push_back(triangle);
+            }
+        }
+
+        return true;
+    }
+
+    void drawMesh(const Mesh& mesh) {
+        glBegin(GL_TRIANGLES);
+        for (const auto& triangle : mesh.triangles) {
+            for (const auto& vertex : triangle.vertices) {
+                glNormal3f(vertex.normal.x, vertex.normal.y, vertex.normal.z);
+                glTexCoord2f(vertex.texCoord.x, vertex.texCoord.y);
+                glVertex3f(vertex.position.x, vertex.position.y, vertex.position.z);
+            }
+        }
+        glEnd();
     }
 
     void Terminate() {
-        // m_basicProgram.Destroy();
-    }
-
-    void drawCube(){
-        glBegin(GL_QUADS);
-
-        // Face avant
-        glColor3f(1.0f, 0.0f, 0.0f); // Rouge
-        glVertex3f(-1.0f, -1.0f,  1.0f);
-        glVertex3f( 1.0f, -1.0f,  1.0f);
-        glVertex3f( 1.0f,  1.0f,  1.0f);
-        glVertex3f(-1.0f,  1.0f,  1.0f);
-
-        // Face arrière
-        glColor3f(0.0f, 1.0f, 0.0f); // Vert
-        glVertex3f(-1.0f, -1.0f, -1.0f);
-        glVertex3f(-1.0f,  1.0f, -1.0f);
-        glVertex3f( 1.0f,  1.0f, -1.0f);
-        glVertex3f( 1.0f, -1.0f, -1.0f);
-
-        // Face gauche
-        glColor3f(0.0f, 0.0f, 1.0f); // Bleu
-        glVertex3f(-1.0f, -1.0f, -1.0f);
-        glVertex3f(-1.0f, -1.0f,  1.0f);
-        glVertex3f(-1.0f,  1.0f,  1.0f);
-        glVertex3f(-1.0f,  1.0f, -1.0f);
-
-        // Face droite
-        glColor3f(1.0f, 1.0f, 0.0f); // Jaune
-        glVertex3f( 1.0f, -1.0f, -1.0f);
-        glVertex3f( 1.0f,  1.0f, -1.0f);
-        glVertex3f( 1.0f,  1.0f,  1.0f);
-        glVertex3f( 1.0f, -1.0f,  1.0f);
-
-        // Face supérieure
-        glColor3f(1.0f, 0.0f, 1.0f); // Magenta
-        glVertex3f(-1.0f,  1.0f, -1.0f);
-        glVertex3f(-1.0f,  1.0f,  1.0f);
-        glVertex3f( 1.0f,  1.0f,  1.0f);
-        glVertex3f( 1.0f,  1.0f, -1.0f);
-
-        // Face inférieure
-        glColor3f(0.0f, 1.0f, 1.0f); // Cyan
-        glVertex3f(-1.0f, -1.0f, -1.0f);
-        glVertex3f( 1.0f, -1.0f, -1.0f);
-        glVertex3f( 1.0f, -1.0f,  1.0f);
-        glVertex3f(-1.0f, -1.0f,  1.0f);
-
-        glEnd();
+        // Cleanup if necessary
     }
 
     void display() {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glLoadIdentity();
-        // glTranslatef(0.0f, -30.0f, -500.0f);
-        // glRotatef(30.0f, 1.0f, -1.0f, 0.0f);
         glTranslatef(pos_x, pos_y, pos_z);
         glRotatef(angle_x, 1.0f, 0.0f, 0.0f);
         glRotatef(angle_y, 0.0f, 1.0f, 0.0f);
-        drawCube();
+
+        drawMesh(m_mesh);
     }
 
     void Render() {
-        // glUseProgram(m_basicProgram.GetProgram());
-        // glClearColor(0.f, 1.f, 0.f, 1.f);
         display();
     }
 };
-
-// void timer(int value) {
-//     if (is_updated) {
-//         is_updated = false;
-//         glutPostRedisplay();
-//     }
-//     glutTimerFunc(INTERVAL, timer, 0);
-// }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     Application* app = (Application*)glfwGetWindowUserPointer(window);
@@ -192,29 +211,29 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
     if (yoffset > 0 && current_scroll > 0) {
         current_scroll--;
         pos_z += zoom_per_scroll;
-    } else if (yoffset < 0 && current_scroll < 50) {
+    } else if (yoffset < 0 && current_scroll < 1000) {
         current_scroll++;
         pos_z -= zoom_per_scroll;
     }
 }
 
 void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
-        if (is_holding_mouse) {
-            angle_y += (xpos - x_old);
-            x_old = xpos;
-            if (angle_y > 360.0f)
-                angle_y -= 360.0f;
-            else if (angle_y < 0.0f)
-                angle_y += 360.0f;
+    if (is_holding_mouse) {
+        angle_y += (xpos - x_old);
+        x_old = xpos;
+        if (angle_y > 360.0f)
+            angle_y -= 360.0f;
+        else if (angle_y < 0.0f)
+            angle_y += 360.0f;
 
-            angle_x += (ypos - y_old);
-            y_old = ypos;
-            if (angle_x > 90.0f)
-                angle_x = 90.0f;
-            else if (angle_x < -90.0f)
-                angle_x = -90.0f;
-        }
+        angle_x += (ypos - y_old);
+        y_old = ypos;
+        if (angle_x > 90.0f)
+            angle_x = 90.0f;
+        else if (angle_x < -90.0f)
+            angle_x = -90.0f;
     }
+}
 
 int main(void) {
     int width = 1200;
@@ -230,7 +249,7 @@ int main(void) {
     }
 
     glfwMakeContextCurrent(window);
-    
+
     glEnable(GL_DEPTH_TEST); // Enable depth testing for correct rendering
 
     Application app;
@@ -242,7 +261,7 @@ int main(void) {
     glfwSetScrollCallback(window, scroll_callback);
     glfwSetCursorPosCallback(window, cursor_position_callback);
 
-    while (!glfwWindowShouldClose(window)) {        
+    while (!glfwWindowShouldClose(window)) {
         app.Render();
         glfwSwapBuffers(window);
         glfwPollEvents();
