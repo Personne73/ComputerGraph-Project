@@ -18,12 +18,12 @@ double POS_X, POS_Y;
 
 GLfloat light_pos[] = {-10.0f, 10.0f, 100.00f, 1.0f};
 
-float pos_x = 0.0f, pos_y = 0.0f, pos_z = -20.0f;
+float pos_x = 0.0f, pos_y = -40.0f, pos_z = -300.0f;
 float angle_x = 30.0f, angle_y = 0.0f;
 
 int x_old = 0, y_old = 0;
-int current_scroll = 0;
-float zoom_per_scroll = 1.0f;
+int current_scroll = 5;
+float zoom_per_scroll = 2.0f;
 
 bool is_holding_mouse = false;
 bool is_updated = false;
@@ -67,8 +67,16 @@ struct Mesh {
     GLuint ebo;
 };
 
+struct Object {
+    Mesh mesh;
+    vec3 position;
+    vec3 scale;
+    vec3 rotation;
+};
+
 struct Application {
     Mesh m_mesh;
+    std::vector<Object> m_objects;
 
     void Initialize() {
         glEnable(GL_LIGHTING);
@@ -89,8 +97,27 @@ struct Application {
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_DEPTH_TEST);
 
-        if (LoadObject("file/IronMan.obj", m_mesh)) {
+        // if (LoadObject("file/Cyborg.obj", m_mesh)) {
+        //     std::cout << "Loaded OBJ file" << std::endl;
+        // }
+
+        LoadObject("file/Cyborg.obj", vec3(0.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 0.0f, 0.0f));
+        LoadObject("file/IronMan.obj", vec3(-100.0f, 10.0f, 0.0f), vec3(0.5f, 0.5f, 0.5f), vec3(0.0f, 180.0f, 0.0f));
+        LoadObject("file/Lowpoly_tree.obj", vec3(100.0f, -10.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 90.0f, 0.0f));
+        LoadObject("file/dolphin.obj", vec3(0.0f, -100.0f, 50.0f), vec3(8.0f, 8.0f, 8.0f), vec3(30.0f, 45.0f, 50.0f));
+    }
+
+    void LoadObject(const std::string& inputfile, vec3 position, vec3 scale, vec3 rotation) {
+        Mesh mesh;
+
+        if(LoadObject(inputfile, mesh)) {
             std::cout << "Loaded OBJ file" << std::endl;
+            Object object;
+            object.mesh = mesh;
+            object.position = position;
+            object.scale = scale;
+            object.rotation = rotation;
+            m_objects.push_back(object);
         }
     }
 
@@ -185,7 +212,21 @@ struct Application {
         glRotatef(angle_x, 1.0f, 0.0f, 0.0f);
         glRotatef(angle_y, 0.0f, 1.0f, 0.0f);
 
-        drawMesh(m_mesh);
+        
+        // drawMesh(m_mesh);
+        for (const auto& object : m_objects) {
+            glPushMatrix();
+
+            glTranslatef(object.position.x, object.position.y, object.position.z);
+            glScalef(object.scale.x, object.scale.y, object.scale.z);
+            glRotatef(object.rotation.x, 1.0f, 0.0f, 0.0f);
+            glRotatef(object.rotation.y, 0.0f, 1.0f, 0.0f);
+            glRotatef(object.rotation.z, 0.0f, 0.0f, 1.0f);
+
+            drawMesh(object.mesh);
+
+            glPopMatrix(); // Restore the previous ModelView matrix
+        }
     }
 
     void Render() {
