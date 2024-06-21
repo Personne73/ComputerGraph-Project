@@ -101,8 +101,8 @@ struct Application {
         //     std::cout << "Loaded OBJ file" << std::endl;
         // }
 
-        LoadObject("file/Cyborg.obj", vec3(0.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 0.0f, 0.0f));
-        LoadObject("file/IronMan.obj", vec3(-100.0f, 10.0f, 0.0f), vec3(0.5f, 0.5f, 0.5f), vec3(0.0f, 180.0f, 0.0f));
+        LoadObject("file/HighPoly.obj", vec3(-200.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 0.0f, 0.0f));
+        LoadObject("file/Cyborg.obj", vec3(-100.0f, 10.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 180.0f, 0.0f));
         LoadObject("file/Lowpoly_tree.obj", vec3(100.0f, -10.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 90.0f, 0.0f));
         LoadObject("file/dolphin.obj", vec3(0.0f, -100.0f, 50.0f), vec3(8.0f, 8.0f, 8.0f), vec3(30.0f, 45.0f, 50.0f));
     }
@@ -123,6 +123,7 @@ struct Application {
 
     bool LoadObject(const std::string& inputfile, Mesh& mesh) {
         tinyobj::ObjReaderConfig reader_config;
+        reader_config.triangulate = true; // Convert polygons to triangles
         reader_config.mtl_search_path = ""; // Path to material files
 
         tinyobj::ObjReader reader;
