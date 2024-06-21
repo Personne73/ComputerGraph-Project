@@ -11,8 +11,7 @@
 
 #include "common/GLShader.h"
 #include "common/tiny_obj_loader.cc"
-
-// #define INTERVAL 15
+#include "common/mat4.h"
 
 double POS_X, POS_Y;
 
@@ -23,7 +22,7 @@ float angle_x = 30.0f, angle_y = 0.0f;
 
 int x_old = 0, y_old = 0;
 int current_scroll = 5;
-float zoom_per_scroll = 2.0f;
+float zoom_per_scroll = 5.0f;
 
 bool is_holding_mouse = false;
 bool is_updated = false;
@@ -62,9 +61,6 @@ struct Mesh {
     std::vector<Triangle> triangles;
     std::vector<unsigned int> indices;
     std::vector<Material> materials;
-    Material defaultMaterial;
-    GLuint vbo;
-    GLuint ebo;
 };
 
 struct Object {
@@ -96,10 +92,6 @@ struct Application {
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glEnable(GL_TEXTURE_2D);
         glEnable(GL_DEPTH_TEST);
-
-        // if (LoadObject("file/Cyborg.obj", m_mesh)) {
-        //     std::cout << "Loaded OBJ file" << std::endl;
-        // }
 
         LoadObject("file/HighPoly.obj", vec3(-200.0f, 0.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 0.0f, 0.0f));
         LoadObject("file/Cyborg.obj", vec3(-100.0f, 10.0f, 0.0f), vec3(1.0f, 1.0f, 1.0f), vec3(0.0f, 180.0f, 0.0f));
@@ -143,6 +135,7 @@ struct Application {
         auto& shapes = reader.GetShapes();
         auto& materials = reader.GetMaterials();
 
+        // Load vertices
         std::vector<vec3> vertices;
         for (size_t i = 0; i < attrib.vertices.size(); i += 3) {
             vertices.emplace_back(
@@ -151,6 +144,7 @@ struct Application {
                 attrib.vertices[i + 2]);
         }
 
+        // Load normals
         std::vector<vec3> normals;
         for (size_t i = 0; i < attrib.normals.size(); i += 3) {
             normals.emplace_back(
@@ -159,6 +153,7 @@ struct Application {
                 attrib.normals[i + 2]);
         }
 
+        // Load texture coordinates
         std::vector<vec2> texcoords;
         for (size_t i = 0; i < attrib.texcoords.size(); i += 2) {
             texcoords.emplace_back(
@@ -166,8 +161,21 @@ struct Application {
                 attrib.texcoords[i + 1]);
         }
 
+        // Load materials
+        for (const auto& mat : materials) {
+            Material material;
+            material.ambient = vec3(mat.ambient[0], mat.ambient[1], mat.ambient[2]);
+            material.diffuse = vec3(mat.diffuse[0], mat.diffuse[1], mat.diffuse[2]);
+            material.specular = vec3(mat.specular[0], mat.specular[1], mat.specular[2]);
+            material.shininess = mat.shininess;
+            mesh.materials.push_back(material);
+        }
+
+        // Load triangles and associate with materials
         for (const auto& shape : shapes) {
             const auto& indices = shape.mesh.indices;
+            const auto& material_ids = shape.mesh.material_ids;
+
             for (size_t i = 0; i < indices.size(); i += 3) {
                 Triangle triangle;
                 for (int j = 0; j < 3; ++j) {
@@ -184,6 +192,7 @@ struct Application {
                     }
                 }
                 mesh.triangles.push_back(triangle);
+                mesh.indices.push_back(material_ids[i / 3]);
             }
         }
 
@@ -228,6 +237,23 @@ struct Application {
 
             glPopMatrix(); // Restore the previous ModelView matrix
         }
+        // mat4 view = mat4::translate(pos_x, pos_y, pos_z) *
+        //             mat4::rotateX(angle_x) *
+        //             mat4::rotateY(angle_y);
+
+        // for (const auto& object : m_objects) {
+        //     mat4 model = mat4::translate(object.position.x, object.position.y, object.position.z) *
+        //                 mat4::scale(object.scale.x, object.scale.y, object.scale.z) *
+        //                 mat4::rotateX(object.rotation.x) *
+        //                 mat4::rotateY(object.rotation.y) *
+        //                 mat4::rotateZ(object.rotation.z);
+                        
+        //     mat4 worldMatrix = view * model;
+            
+        //     glLoadMatrixf(&worldMatrix.m[0][0]);
+
+        //     drawMesh(object.mesh);
+        // }
     }
 
     void Render() {
@@ -315,6 +341,6 @@ int main(void) {
 }
 
 // Compilation:
-// g++ -o main main.cpp common/GLShader.cpp -framework OpenGL -lglfw
+// g++ -o main main.cpp -framework OpenGL -lglfw
 // Exécution:
 // ./main
